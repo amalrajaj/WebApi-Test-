@@ -1,43 +1,51 @@
-﻿using BLL.Controllers;
+﻿/***********************************************************************
+   Program Name             : StudentController.cs
+   Purpose                  : API Controller for Student
+   Creation Date            : 1-7-2023
+   Created By               : Amalraj 
+   Last Modified By         : 
+   Modification Date        : 
+   Change Request/Bug Nos   :
+/***********************************************************************/
+using BLL.Controllers;
 using BOL.ModelDtos;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using WebApiProject.Model;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+using BOL.AccountDto;
 
 namespace WebApiProject.Controllers
 {
-    //[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+   // [Route("Secure")]
+    [Authorize]
     [Route("api/[controller]")]
     [ApiController]
     public class StudentController : ControllerBase
     {
-        private readonly StudentBll _studentBll;
-        private readonly JWTSettings _jwtsettings;
+        private readonly StudentBll _studentBll;  
         private readonly ILogger<StudentController> _logger;
         private readonly IWebHostEnvironment _hostEnvironment;
+        private readonly IConfiguration _config;
 
-        public StudentController(ILogger<StudentController> logger,IOptions<JWTSettings> options, IWebHostEnvironment hostEnvironment)
+        //Constructor
+        public StudentController(IConfiguration config, ILogger<StudentController> logger, IWebHostEnvironment hostEnvironment)
         {
             _studentBll = new StudentBll();
-            _logger = logger;
-            _jwtsettings = options.Value;
+            _logger = logger;       
             _hostEnvironment = hostEnvironment;
+            _config = config;
         }
 
-
-        #region get 
-        [HttpGet]       
+        #region get       
         [ProducesResponseType(StatusCodes.Status200OK)]
+        [HttpGet]
         public ActionResult<List<StudentDto>> GetAllStudent()
-        {            
+        {
             _logger.LogInformation("Inside Get all");
-            return Ok(_studentBll.GetAllStudentsBll());           
+            return Ok(_studentBll.GetAllStudentsBll());
         }
         [HttpGet]
         [Route("{id:int}")]
@@ -46,8 +54,6 @@ namespace WebApiProject.Controllers
             _logger.LogInformation("Inside Get GetSingle ");
             return Ok(_studentBll.GetSingleStudentBll(id));
         }
-
-    
         #endregion get 
 
         #region save       
@@ -56,8 +62,8 @@ namespace WebApiProject.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        [HttpPost]
-        public ActionResult SaveStudent([FromBody] StudentDto studentDto)
+        [HttpPost("Save")]
+        public ActionResult SaveStudent([FromBody]  StudentDto studentDto)
         {
             _logger.LogInformation("Inside SaveStudent ");
             if (ModelState.IsValid)
@@ -82,7 +88,6 @@ namespace WebApiProject.Controllers
         #endregion save
 
         #region delete
-
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -90,6 +95,7 @@ namespace WebApiProject.Controllers
         [Route("{id:int}")]
         public ActionResult StudentDelete(int id)
         {
+            
             _logger.LogInformation("Inside StudentDelete ");
             if (id == 0)
             {
@@ -97,18 +103,17 @@ namespace WebApiProject.Controllers
             }
             else
             {
-                if (_studentBll.DeleteStudentBll(id))
-                {
-                    return Ok();
-                }
-            }
-            return NoContent();
+                var isSuccess = _studentBll.DeleteStudentBll(id);
+                return new StatusCodeResult(isSuccess ? 200 : 500);
+              
+            }            
         }
         #endregion
 
         #region update
-        [HttpPut]
-        public ActionResult UpdateStudent(int id,[FromBody]StudentDto studentDto) 
+        [HttpPut]       
+        [Route("{id:int}")]
+        public ActionResult UpdateStudent(int id, [FromBody] StudentDto studentDto)
         {
             _logger.LogInformation("Inside UpdateStudent ");
             if (id != studentDto.StudentId)
@@ -117,58 +122,70 @@ namespace WebApiProject.Controllers
             }
             else
             {
-                return Ok(_studentBll.UpdateStudentBll(id,studentDto));
-            }            
-        }
-        #endregion
-
-        #region Account
-
-        [AllowAnonymous]
-        [HttpPost("Authenticate")]
-        public ActionResult Authenticate([FromBody] StudentDto studentDto)
-        {
-            var isStudentDtoFound = _studentBll.GetSinglelStudentByUsernameAndEmailBll(studentDto);
-            if (isStudentDtoFound.StudentId == 0)
-                return Unauthorized();
-            var tokenhandler = new JwtSecurityTokenHandler();
-            var jsonObj = GetApplicationJson();
-            // Parse the JSON string into a C# object      
-            var tokenkey = Encoding.UTF8.GetBytes(jsonObj.ToString());
-            var tokenDescription = new SecurityTokenDescriptor
-            {
-                Subject = new ClaimsIdentity(
-                    new Claim[]
-                    { new Claim(ClaimTypes.Name, studentDto.StudentId.ToString()), new Claim(ClaimTypes.Role,"Admin")
-                    }
-               ),
-                Expires = DateTime.Now.AddSeconds(180),
-                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(tokenkey), SecurityAlgorithms.HmacSha256),
-
-            };
-            var token = tokenhandler.CreateToken(tokenDescription);
-            string finalToken = tokenhandler.WriteToken(token);
-            return Ok(finalToken);
-        }
-
-        #endregion
-
-        [HttpGet("GetApplicationJson")]
-        public string GetApplicationJson()
-        {
-            string filePath = Path.Combine(_hostEnvironment.ContentRootPath, "appsettings.json");     
-            if (!System.IO.File.Exists(filePath))
-            {
-                return null;
+                return Ok(_studentBll.UpdateStudentBll(id, studentDto));
             }
+        }
+        #endregion
 
-            string jsonContent = System.IO.File.ReadAllText(filePath);
-            // return Content(jsonContent, "application/json");
-            return jsonContent;
+        #region Authetication   
+
+        [AllowAnonymous]      
+        [HttpPost("Login")]
+        public ActionResult Login([FromBody] StudentDto studentDto)
+        {
+            var user = Authenticate(studentDto);
+            if (user != null)
+            {
+                var token = GenerateToken(user);
+                return Ok(ConvertStringToJson(token));
+            }
+            return NotFound("user not found");
+        }
+
+        // To generate token
+        private string GenerateToken(StudentDto user)
+        {
+            var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]));  // get that saved in appsettings.json
+            var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);// security algoritham is HmacSha256
+            var claims = new[]// Add Claims
+            {
+                new Claim(ClaimTypes.NameIdentifier,user.StudentName),
+                new Claim(ClaimTypes.Role,"Admin") // default set role = adimn..in this project no user type table thats why
+            };
+            var token = new JwtSecurityToken(_config["Jwt:Issuer"],
+                _config["Jwt:Audience"],
+                claims,
+                expires: DateTime.Now.AddMinutes(2),
+                signingCredentials: credentials);
+         return new JwtSecurityTokenHandler().WriteToken(token);
+
+        }
+
+        //To authenticate user
+        private StudentDto Authenticate(StudentDto studentDto)
+        {
+            var isStudentDtoFound = _studentBll.GetSinglelStudentByUsernameAndEmailBll(studentDto);         
+            if (isStudentDtoFound.StudentId != 0)
+            {
+                return isStudentDtoFound;
+            }
+            else
+            return null;// if true return dto else return null
         }
 
 
+        // copy token into an Dto Object
+        public static TokenDto ConvertStringToJson(string jsonString)
+        {
+            TokenDto tokenDto = new TokenDto();
+            tokenDto.token = jsonString;
+            return tokenDto;
+        }
 
-
+        #endregion
     }
+
+
+
 }
+

@@ -1,8 +1,14 @@
-﻿using AutoMapper;
+﻿/***********************************************************************
+   Program Name             : StudentDal.cs
+   Purpose                  : Data Access Layer for DivisionGoal table Student
+   Creation Date            : 1-7-2023
+   Created By               : Amalraj 
+   Last Modified By         : 
+   Modification Date        : 
+   Change Request/Bug Nos   :
+/***********************************************************************/
 using BOL.ModelDtos;
 using DAL.Models;
-using DAL.Common;
-using Microsoft.EntityFrameworkCore;
 
 namespace DAL.Student
 {
@@ -28,19 +34,6 @@ namespace DAL.Student
               }           
             return StudentDtoList;
         }
-
-
-        #region logincheck
-        public StudentDto GetSinglelStudentByUsernameAndEmail(StudentDto studentDto)
-        {
-            var StudentDto = new StudentDto();
-            var student = _demoDbContext.StudentDbTables.ToList().FirstOrDefault(x => x.StudentName == studentDto.StudentName && x.Email == studentDto.Email);
-            if(null != student)
-            CopyToDtoFromModel(StudentDto, student);
-            return StudentDto;
-        }
-        #endregion
-
         public StudentDto GetSinglelStudent(int StudentId)
         {
             var StudentDto = new StudentDto();
@@ -121,21 +114,19 @@ namespace DAL.Student
         }
         #endregion
 
-
-        #region Copyfunction
-        private StudentDto CopyToDtoMapper(StudentDto destination, StudentDbTable source)
+        #region logincheck
+        public StudentDto GetSinglelStudentByUsernameAndEmail(StudentDto studentDto)
         {
-            var config = new MapperConfiguration(cfg => cfg.CreateMap<StudentDto, StudentDbTable>().ForMember(c => c.Stunthobbies, option => option.Ignore()));
-            var mapper = new Mapper(config);
-            destination = mapper.Map<StudentDto>(source);
-            return destination;
-        }   
-        private void CopyToModelMapper(StudentDbTable destination, StudentDto source)
-        {
-            var configformodel = new MapperConfiguration(cfg => cfg.CreateMap<StudentDto, StudentDbTable>().ForMember(c => c.Stunthobbies, option => option.Ignore()));
-            var mapperformodel = new Mapper(configformodel);
-            destination = mapperformodel.Map<StudentDbTable>(source);
+            var StudentDto = new StudentDto();
+            var student = _demoDbContext.StudentDbTables.ToList().FirstOrDefault(x => x.StudentName == studentDto.StudentName && x.Email == studentDto.Email);
+            if (null != student)
+                CopyToDtoFromModel(StudentDto, student);
+            return StudentDto;
         }
+        #endregion
+
+        #region Copyfunction       
+
         private void CopyToModelFromDto(StudentDbTable destination, StudentDto source)
         {
             destination.StudentId = source.StudentId;
@@ -152,8 +143,6 @@ namespace DAL.Student
             destination.Dob = source.Dob;
             destination.Class = source.Class;
         }
-
-
 
         #endregion
     }
